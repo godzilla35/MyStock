@@ -27,14 +27,26 @@ class Kiwoom(QAxWidget):
 
     def event_slots(self):
         self.OnEventConnect.connect(self.login_slot)
-        self.[OnReceiveTrData.connect(self.trdata_slot)
+        self.OnReceiveTrData.connect(self.trdata_slot)
 
     def login_slot(self, errCode):
         print(errors(errCode))
         self.login_event_loop.exit()
 
-    def trdata_slot(self):
+    def trdata_slot(self, sScrNo, sRQName, sTrCode, sRecordName, sPrevNext):
+        '''
+        tr 요청 받는 구역
+        :param sScrNo: 화면번호
+        :param sRQNamem: 사용자 구분명
+        :param sTrCode: TR이름
+        :param sRecordName: 레코드 이름
+        :param sPrevNext: 연속조회 유무를 판단하는 값 0: 연속(추가조회)데이터 없음, 2:연속(추가조회) 데이터 있음
+        :return:
+        '''
 
+        if sRQName == "예수금상세현황요청":
+            deposit = self.dynamicCall("GetCommData(String, String, int, String)", sTrCode, sRecordName, 0, "예수금")
+            print("예수금 : %s" % deposit)
 
     def signal_login_commConnect(self): # 로그인
         self.dynamicCall("CommConnect()")
@@ -47,7 +59,6 @@ class Kiwoom(QAxWidget):
         print("my account num %s " % self.account_num)
 
     def detail_account_info(self): # 예수금 가져오기
-        print("예수금")
         self.dynamicCall("SetInputValue(String, String)", "계좌번호", self.account_num)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", self.account_password)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
