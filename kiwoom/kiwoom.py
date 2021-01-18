@@ -9,8 +9,8 @@ class Kiwoom(QAxWidget):
 
         #### event loop 모음
         self.login_event_loop = None
-        self.account_info_event_loop = None
-        self.account_eval_history_event_loop = None
+        self.account_info_event_loop = QEventLoop()
+        self.account_eval_history_event_loop = QEventLoop()
 
         #### 변수
         self.account_num = None
@@ -66,6 +66,8 @@ class Kiwoom(QAxWidget):
 
             for i in range(rows):
                 stock_code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "종목번호")
+                stock_code = stock_code.strip()[1:]
+
                 stock_name = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "종목명")
                 purchase_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "매입가")
                 yield_rate = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "수익률(%)")
@@ -78,7 +80,6 @@ class Kiwoom(QAxWidget):
                 else:
                     self.account_stock_dict.update({stock_code: {}})
 
-                stock_code = stock_code.strip()[1:]
                 stock_name = stock_name.strip()
                 purchase_price = int(purchase_price.strip())
                 yield_rate = float(yield_rate.strip())
@@ -86,7 +87,6 @@ class Kiwoom(QAxWidget):
                 purchase_amount = int(purchase_amount.strip())
                 available_sale_quantity = int(available_sale_quantity.strip())
 
-                self.account_stock_dict[stock_code].update({"종목번호": stock_code})
                 self.account_stock_dict[stock_code].update({"종목명": stock_name})
                 self.account_stock_dict[stock_code].update({"매입가": purchase_price})
                 self.account_stock_dict[stock_code].update({"수익률(%)": yield_rate})
@@ -95,6 +95,7 @@ class Kiwoom(QAxWidget):
                 self.account_stock_dict[stock_code].update({"매매가능수량": available_sale_quantity})
 
                 cnt += 1
+
             print("가진 종목 : %s" % self.account_stock_dict)
 
             if sPrevNext == "2":  # 다음 페이지가 존재하는 경우 한번 더 요청
@@ -118,7 +119,7 @@ class Kiwoom(QAxWidget):
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
         self.dynamicCall("SetInputValue(String, String)", "조회구분", "2")
         self.dynamicCall("CommRqData(String, String, int, String)", "예수금상세현황요청", "opw00001", "0", "2000")
-        self.account_info_event_loop = QEventLoop()
+
         self.account_info_event_loop.exec_()
 
     def account_eval_history(self, sPrevNext="0"):
@@ -127,7 +128,7 @@ class Kiwoom(QAxWidget):
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
         self.dynamicCall("SetInputValue(String, String)", "조회구분", "1")
         self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", "0", "2000")
-        self.account_eval_history_event_loop = QEventLoop()
+
         self.account_eval_history_event_loop.exec_()
 
 
