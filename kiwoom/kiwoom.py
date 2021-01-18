@@ -10,7 +10,6 @@ class Kiwoom(QAxWidget):
         #### event loop 모음
         self.login_event_loop = None
         self.account_info_event_loop = QEventLoop()
-        self.account_eval_history_event_loop = QEventLoop()
 
         #### 변수
         self.account_num = None
@@ -18,6 +17,8 @@ class Kiwoom(QAxWidget):
         self.use_money = 0
         self.use_money_pct = 0.1
         self.account_stock_dict = {}
+        self.screen_my_info = "2000"
+        self.not_book_dict = {}
 
         ###
         self.get_ocx_instance()
@@ -26,6 +27,7 @@ class Kiwoom(QAxWidget):
         self.get_account_info()
         self.detail_account_info()
         self.account_eval_history()
+        self.query_not_book()
 
 
     def get_ocx_instance(self):
@@ -87,12 +89,14 @@ class Kiwoom(QAxWidget):
                 purchase_amount = int(purchase_amount.strip())
                 available_sale_quantity = int(available_sale_quantity.strip())
 
-                self.account_stock_dict[stock_code].update({"종목명": stock_name})
-                self.account_stock_dict[stock_code].update({"매입가": purchase_price})
-                self.account_stock_dict[stock_code].update({"수익률(%)": yield_rate})
-                self.account_stock_dict[stock_code].update({"현재가": present_price})
-                self.account_stock_dict[stock_code].update({"매입금액": purchase_amount})
-                self.account_stock_dict[stock_code].update({"매매가능수량": available_sale_quantity})
+                query_data = self.account_stock_dict[stock_code]
+
+                query_data.update({"종목명": stock_name})
+                query_data.update({"매입가": purchase_price})
+                query_data.update({"수익률(%)": yield_rate})
+                query_data.update({"현재가": present_price})
+                query_data.update({"매입금액": purchase_amount})
+                query_data.update({"매매가능수량": available_sale_quantity})
 
                 cnt += 1
 
@@ -101,7 +105,62 @@ class Kiwoom(QAxWidget):
             if sPrevNext == "2":  # 다음 페이지가 존재하는 경우 한번 더 요청
                 self.detail_account_info(sPrevNext="2")
             else:
-                self.account_eval_history_event_loop.exit()
+                self.account_info_event_loop.exit()
+
+        elif sRQName == "실시간미체결요청":
+            total_pulchase = self.dynamicCall("GetCommData(QString, QString, int, QString)",
+                                              sTrCode, sRecordName, 0, "총수익률(%)")
+
+            rows = self.dynamicCall("GetRepeatCnt(QString, QString)", sTrCode, sRecordName)
+            cnt = 0
+
+            for i in range(rows):
+                stock_code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "종목번호")
+                stock_code = stock_code.strip()
+
+                stock_name = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i,"종목명")
+                stock_name = stock_name.strip()
+
+                order_num = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "주문번호")
+                order_num = int(order_num.strip())
+
+                order_status = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "주문상태")
+                order_status = order_status.strip()
+
+                order_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "주문수량")
+                order_quantity = int(order_quantity.strip())
+
+                order_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "주문가격")
+                order_price = int(order_price.strip())
+
+                order_gubun = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "주문구분")
+                order_gubun = order_gubun.strip().lstrip(' +').lstrip(' -')
+
+                not_book_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "미체결수량")
+                not_book_quantity = int(not_book_quantity.strip())
+
+                book_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRecordName, i, "체결량")
+                book_quantity = int(book_quantity.strip())
+
+                if order_num in self.not_book_dict:
+                    pass
+                else:
+                    self.not_book_dict[order_num] = {}
+
+                not_book_data = self.not_book_dict[order_num]
+
+                not_book_data.update({"종목번호": stock_code})
+                not_book_data.update({"종목명": stock_name})
+                not_book_data.update({"주문번호": order_num})
+                not_book_data.update({"주문상태": order_status})
+                not_book_data.update({"주문수량": order_quantity})
+                not_book_data.update({"주문가격": order_price})
+                not_book_data.update({"주문구분": order_gubun})
+                not_book_data.update({"미체결수량": not_book_quantity})
+                not_book_data.update({"체결량": book_quantity})
+
+            print("미체결 종목 : %s" % self.not_book_dict)
+            self.account_info_event_loop.exit()
 
     def signal_login_comm_connect(self):  # 로그인
         self.dynamicCall("CommConnect()")
@@ -118,7 +177,7 @@ class Kiwoom(QAxWidget):
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", self.account_password)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
         self.dynamicCall("SetInputValue(String, String)", "조회구분", "2")
-        self.dynamicCall("CommRqData(String, String, int, String)", "예수금상세현황요청", "opw00001", "0", "2000")
+        self.dynamicCall("CommRqData(String, String, int, String)", "예수금상세현황요청", "opw00001", "0", self.screen_my_info)
 
         self.account_info_event_loop.exec_()
 
@@ -127,10 +186,19 @@ class Kiwoom(QAxWidget):
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", self.account_password)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
         self.dynamicCall("SetInputValue(String, String)", "조회구분", "1")
-        self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", "0", "2000")
+        self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", "0", self.screen_my_info)
 
-        self.account_eval_history_event_loop.exec_()
+        self.account_info_event_loop.exec_()
 
+    def query_not_book(self, sPrevNext="0"):
+        self.dynamicCall("SetInputValue(String, String)", "계좌번호", self.account_num)
+        self.dynamicCall("SetInputValue(String, String)", "전체종목구분", "0")
+        self.dynamicCall("SetInputValue(String, String)", "매매구분", "0")
+        self.dynamicCall("SetInputValue(String, String)", "종목코드", "00")
+        self.dynamicCall("SetInputValue(String, String)", "체결구분", "1")
+        self.dynamicCall("CommRqData(String, String, int, String)", "실시간미체결요청", "opt10075", "0", self.screen_my_info)
+
+        self.account_info_event_loop.exec_()
 
 
 #
